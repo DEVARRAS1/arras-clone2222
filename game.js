@@ -1,63 +1,12 @@
-const c=document.getElementById("game");
-const x=c.getContext("2d");
+let mx=0;
+let my=0;
 
-function r(){
-c.width=innerWidth;
-c.height=innerHeight;
-}
-r();
-onresize=r;
+onmousemove=e=>{
+mx=e.clientX;
+my=e.clientY;
+};
 
-let px=0,py=0;
-let k={};
-
-onkeydown=e=>k[e.key]=1;
-onkeyup=e=>k[e.key]=0;
-
-function loop(){
-
-if(k.w)py-=4;
-if(k.s)py+=4;
-if(k.a)px-=4;
-if(k.d)px+=4;
-
-x.clearRect(0,0,c.width,c.height);
-
-for(let gx=-2000;gx<2000;gx+=50){
-
-x.beginPath();
-
-x.moveTo(
-gx-px+c.width/2,
-0
-);
-
-x.lineTo(
-gx-px+c.width/2,
-c.height
-);
-
-x.stroke();
-
-}
-
-for(let gy=-2000;gy<2000;gy+=50){
-
-x.beginPath();
-
-x.moveTo(
-0,
-gy-py+c.height/2
-);
-
-x.lineTo(
-c.width,
-gy-py+c.height/2
-);
-
-x.stroke();
-
-}
+function tank(){
 
 x.save();
 
@@ -66,20 +15,63 @@ c.width/2,
 c.height/2
 );
 
-x.fillStyle="skyblue";
+let angle=Math.atan2(
+my-c.height/2,
+mx-c.width/2
+);
+
+x.rotate(angle);
+
+const outline="#666";
+
+/* BIG barrel */
+
+x.fillStyle="#A9A9A9";
+x.strokeStyle=outline;
+
+x.lineWidth=4;
 
 x.beginPath();
 
-x.arc(0,0,30,0,7);
+x.roundRect(
+0,
+-8,
+52,
+16,
+8
+);
 
 x.fill();
-
-x.fillRect(0,-8,45,16);
+x.stroke();
 
 x.restore();
 
-requestAnimationFrame(loop);
+/* LV0 tiny body */
 
+x.beginPath();
+
+x.fillStyle="#5FA8FF";
+
+x.lineWidth=4;
+
+x.strokeStyle=outline;
+
+x.arc(
+c.width/2,
+c.height/2,
+20,
+0,
+Math.PI*2
+);
+
+x.fill();
+x.stroke();
+
+let mx=0;
+let my=0;
+
+onmousemove=e=>{
+mx=e.clientX;
+my=e.clientY;
+};
 }
-
-loop();
