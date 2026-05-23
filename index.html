@@ -13,7 +13,7 @@
     </style>
 </head>
 <body>
-    <div id="hint">Press <b>N</b> to Insta-Level | Click to Shoot</div>
+    <div id="hint"><b>W A S D</b> Move | <b>Mouse</b> Aim & Shoot | <b>N</b> Lvl 45</div>
     <div id="ui">
         <div id="stats">Lvl 0 Tank | Score: 0</div>
         <div class="bar-bg"><div id="bar-fill"></div></div>
@@ -40,7 +40,8 @@ const player = {
     friction: 0.92,
     maxSpeed: 2.5,
     lastShot: 0,
-    reload: 400 // ms
+    reload: 350,
+    recoil: 0 // Recoil offset value
 };
 
 let bullets = [];
@@ -48,7 +49,7 @@ const keys = {};
 
 window.addEventListener('keydown', e => {
     keys[e.code] = true;
-    if (e.code === 'KeyN') { // N key shortcut
+    if (e.code === 'KeyN') {
         score = maxScore;
         updateStats();
     }
@@ -70,17 +71,28 @@ function shoot() {
     const now = Date.now();
     if (now - player.lastShot > player.reload) {
         const currentRadius = 12 + (level * 0.7);
-        const barrelLen = currentRadius * 1.9;
+        const barrelW = currentRadius * 0.9;
+        const barrelL = currentRadius * 1.9;
         
-        // Spawn at tip of barrel
+        const baseRange = 80;
+        const extraRange = level * 2.5; 
+
         bullets.push({
-            x: player.x + Math.cos(player.angle) * barrelLen,
-            y: player.y + Math.sin(player.angle) * barrelLen,
-            vx: Math.cos(player.angle) * 8,
-            vy: Math.sin(player.angle) * 8,
-            life: 100, // Distance/Time it travels
-            radius: currentRadius * 0.6
+            x: player.x + Math.cos(player.angle) * barrelL,
+            y: player.y + Math.sin(player.angle) * barrelL,
+            vx: Math.cos(player.angle) * 9,
+            vy: Math.sin(player.angle) * 9,
+            life: baseRange + extraRange, 
+            radius: barrelW / 2 
         });
+
+        // Set recoil intensity
+        player.recoil = 8; 
+        
+        // Slight physical knockback
+        player.vx -= Math.cos(player.angle) * 0.5;
+        player.vy -= Math.sin(player.angle) * 0.5;
+        
         player.lastShot = now;
     }
 }
@@ -89,71 +101,74 @@ function loop() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    // Movement
     if (keys['KeyW']) player.vy -= player.accel;
     if (keys['KeyS']) player.vy += player.accel;
     if (keys['KeyA']) player.vx -= player.accel;
     if (keys['KeyD']) player.vx += player.accel;
     if (keys['Mouse0']) shoot();
 
+    // Physics
     player.vx *= player.friction;
     player.vy *= player.friction;
     player.x += player.vx;
     player.y += player.vy;
 
-    // Camera Zoom Out Logic
-    const zoom = 1 / (1 + (level * 0.015)); 
+    // Recoil recovery (smoothly return to 0)
+    player.recoil *= 0.85;
+
+    const zoom = 1 / (1 + (level * 0.012)); 
     ctx.save();
     ctx.translate(canvas.width/2, canvas.height/2);
     ctx.scale(zoom, zoom);
     ctx.translate(-player.x, -player.y);
 
-    // Draw Grid (Infinite)
+    // Grid
     const gridSize = 50;
     ctx.strokeStyle = '#a8a8a8';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    for (let x = player.x - canvas.width/zoom; x < player.x + canvas.width/zoom; x += gridSize) {
+    for (let x = player.x - (canvas.width/zoom); x < player.x + (canvas.width/zoom); x += gridSize) {
         let drawX = Math.floor(x / gridSize) * gridSize;
-        ctx.moveTo(drawX, player.y - canvas.height/zoom);
-        ctx.lineTo(drawX, player.y + canvas.height/zoom);
+        ctx.moveTo(drawX, player.y - (canvas.height/zoom));
+        ctx.lineTo(drawX, player.y + (canvas.height/zoom));
     }
-    for (let y = player.y - canvas.height/zoom; y < player.y + canvas.height/zoom; y += gridSize) {
+    for (let y = player.y - (canvas.height/zoom); y < player.y + (canvas.height/zoom); y += gridSize) {
         let drawY = Math.floor(y / gridSize) * gridSize;
-        ctx.moveTo(player.x - canvas.width/zoom, drawY);
-        ctx.lineTo(player.x + canvas.width/zoom, drawY);
+        ctx.moveTo(player.x - (canvas.width/zoom), drawY);
+        ctx.lineTo(player.x + (canvas.width/zoom), drawY);
     }
     ctx.stroke();
 
     // Bullets
-    bullets.forEach((b, i) => {
-        b.x += b.vx;
-        b.y += b.vy;
-        b.life--;
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        let b = bullets[i];
+        b.x += b.vx; b.y += b.vy; b.life--;
         ctx.fillStyle = '#00b2e1';
         ctx.strokeStyle = '#333';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2.5;
         ctx.beginPath();
         ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
+        ctx.fill(); ctx.stroke();
         if (b.life <= 0) bullets.splice(i, 1);
-    });
+    }
 
-    // Draw Tank
+    // Tank Drawing
     const currentRadius = 12 + (level * 0.7);
     ctx.save();
     ctx.translate(player.x, player.y);
     ctx.rotate(player.angle);
     
-    // Barrel
+    // Recoil pushback on the body
+    ctx.translate(-player.recoil * 0.5, 0);
+
+    // Barrel (recoils inward)
     ctx.fillStyle = '#999';
     ctx.strokeStyle = '#555';
     ctx.lineWidth = 3;
     const barrelW = currentRadius * 0.9;
     const barrelL = currentRadius * 1.9;
-    ctx.fillRect(0, -barrelW/2, barrelL, barrelW);
-    ctx.strokeRect(0, -barrelW/2, barrelL, barrelW);
+    ctx.fillRect(-player.recoil, -barrelW/2, barrelL, barrelW);
+    ctx.strokeRect(-player.recoil, -barrelW/2, barrelL, barrelW);
 
     // Body
     ctx.fillStyle = '#00b2e1';
