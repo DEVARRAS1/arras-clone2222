@@ -39,7 +39,7 @@ const player = {
     maxSpeed: 2.5,
     lastShot: 0,
     reload: 350,
-    barrelOffset: 0 // For the visual barrel kick
+    barrelOffset: 0
 };
 
 let bullets = [];
@@ -78,13 +78,9 @@ function shoot() {
             radius: barrelW / 2 
         });
 
-        // VISUAL BARREL KICK
         player.barrelOffset = 6; 
-
-        // SUBTLE PHYSICAL PUSHBACK
         player.vx -= Math.cos(player.angle) * 0.3; 
         player.vy -= Math.sin(player.angle) * 0.3;
-        
         player.lastShot = now;
     }
 }
@@ -104,7 +100,6 @@ function loop() {
     player.x += player.vx;
     player.y += player.vy;
 
-    // Smooth visual recovery
     if (player.barrelOffset > 0) player.barrelOffset *= 0.8;
 
     const zoom = 1 / (1 + (level * 0.012)); 
@@ -133,7 +128,8 @@ function loop() {
     // Bullets
     bullets.forEach((b, i) => {
         b.x += b.vx; b.y += b.vy; b.life--;
-        ctx.fillStyle = '#00b2e1'; ctx.strokeStyle = '#333'; ctx.lineWidth = 2.5;
+        ctx.fillStyle = '#00b2e1'; ctx.strokeStyle = '#333'; ctx.lineWidth = 3;
+        ctx.lineJoin = "round";
         ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         if (b.life <= 0) bullets.splice(i, 1);
     });
@@ -144,12 +140,19 @@ function loop() {
     ctx.translate(player.x, player.y);
     ctx.rotate(player.angle);
     
-    // Barrel (slides back based on barrelOffset)
-    ctx.fillStyle = '#999'; ctx.strokeStyle = '#555'; ctx.lineWidth = 3;
+    // SEMI-ROUNDED BARREL
+    ctx.fillStyle = '#999'; 
+    ctx.strokeStyle = '#555'; 
+    ctx.lineWidth = 4;
+    ctx.lineJoin = "round"; // This creates the semi-rounded edges
     const barrelW = currentRadius * 0.9;
     const barrelL = currentRadius * 1.9;
-    ctx.fillRect(-player.barrelOffset, -barrelW/2, barrelL, barrelW);
-    ctx.strokeRect(-player.barrelOffset, -barrelW/2, barrelL, barrelW);
+    
+    // Draw barrel path manually to ensure the tip is rounded but base is flat
+    ctx.beginPath();
+    ctx.rect(-player.barrelOffset, -barrelW/2, barrelL, barrelW);
+    ctx.fill();
+    ctx.stroke();
 
     // Body
     ctx.fillStyle = '#00b2e1'; ctx.strokeStyle = '#008ba8';
