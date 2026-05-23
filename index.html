@@ -9,11 +9,9 @@
         .bar-bg { width: 300px; height: 12px; background: #555; border: 2px solid #333; border-radius: 10px; overflow: hidden; }
         #bar-fill { width: 0%; height: 100%; background: #00b2e1; transition: width 0.2s; }
         #stats { color: white; text-shadow: 1px 1px 2px black; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
-        #hint { position: absolute; top: 10px; left: 10px; color: #555; font-size: 12px; }
     </style>
 </head>
 <body>
-    <div id="hint"><b>W A S D</b> Move | <b>Mouse</b> Aim & Shoot | <b>N</b> Lvl 45</div>
     <div id="ui">
         <div id="stats">Lvl 0 Tank | Score: 0</div>
         <div class="bar-bg"><div id="bar-fill"></div></div>
@@ -41,7 +39,9 @@ const player = {
     maxSpeed: 2.5,
     lastShot: 0,
     reload: 350,
-    recoil: 0 // Recoil offset value
+    // Spring Physics for Recoil
+    recoilPos: 0,
+    recoilVel: 0
 };
 
 let bullets = [];
@@ -49,10 +49,7 @@ const keys = {};
 
 window.addEventListener('keydown', e => {
     keys[e.code] = true;
-    if (e.code === 'KeyN') {
-        score = maxScore;
-        updateStats();
-    }
+    if (e.code === 'KeyN') { score = maxScore; updateStats(); }
 });
 window.addEventListener('keyup', e => keys[e.code] = false);
 window.addEventListener('mousedown', () => keys['Mouse0'] = true);
@@ -74,24 +71,21 @@ function shoot() {
         const barrelW = currentRadius * 0.9;
         const barrelL = currentRadius * 1.9;
         
-        const baseRange = 80;
-        const extraRange = level * 2.5; 
-
         bullets.push({
             x: player.x + Math.cos(player.angle) * barrelL,
             y: player.y + Math.sin(player.angle) * barrelL,
             vx: Math.cos(player.angle) * 9,
             vy: Math.sin(player.angle) * 9,
-            life: baseRange + extraRange, 
+            life: 80 + (level * 2.5), 
             radius: barrelW / 2 
         });
 
-        // Set recoil intensity
-        player.recoil = 8; 
+        // Jerk the recoil velocity back hard
+        player.recoilVel -= 12; 
         
-        // Slight physical knockback
-        player.vx -= Math.cos(player.angle) * 0.5;
-        player.vy -= Math.sin(player.angle) * 0.5;
+        // Physical knockback
+        player.vx -= Math.cos(player.angle) * 0.6;
+        player.vy -= Math.sin(player.angle) * 0.6;
         
         player.lastShot = now;
     }
@@ -107,14 +101,18 @@ function loop() {
     if (keys['KeyD']) player.vx += player.accel;
     if (keys['Mouse0']) shoot();
 
-    // Physics
     player.vx *= player.friction;
     player.vy *= player.friction;
     player.x += player.vx;
     player.y += player.vy;
 
-    // Recoil recovery (smoothly return to 0)
-    player.recoil *= 0.85;
+    // --- Spring Math ---
+    let springK = 0.15; // Stiffness
+    let damping = 0.8;  // Friction for the spring
+    let force = -springK * player.recoilPos; 
+    player.recoilVel += force;
+    player.recoilVel *= damping;
+    player.recoilPos += player.recoilVel;
 
     const zoom = 1 / (1 + (level * 0.012)); 
     ctx.save();
@@ -128,20 +126,19 @@ function loop() {
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (let x = player.x - (canvas.width/zoom); x < player.x + (canvas.width/zoom); x += gridSize) {
-        let drawX = Math.floor(x / gridSize) * gridSize;
-        ctx.moveTo(drawX, player.y - (canvas.height/zoom));
-        ctx.lineTo(drawX, player.y + (canvas.height/zoom));
+        let dX = Math.floor(x / gridSize) * gridSize;
+        ctx.moveTo(dX, player.y - (canvas.height/zoom));
+        ctx.lineTo(dX, player.y + (canvas.height/zoom));
     }
     for (let y = player.y - (canvas.height/zoom); y < player.y + (canvas.height/zoom); y += gridSize) {
-        let drawY = Math.floor(y / gridSize) * gridSize;
-        ctx.moveTo(player.x - (canvas.width/zoom), drawY);
-        ctx.lineTo(player.x + (canvas.width/zoom), drawY);
+        let dY = Math.floor(y / gridSize) * gridSize;
+        ctx.moveTo(player.x - (canvas.width/zoom), dY);
+        ctx.lineTo(player.x + (canvas.width/zoom), dY);
     }
     ctx.stroke();
 
     // Bullets
-    for (let i = bullets.length - 1; i >= 0; i--) {
-        let b = bullets[i];
+    bullets.forEach((b, i) => {
         b.x += b.vx; b.y += b.vy; b.life--;
         ctx.fillStyle = '#00b2e1';
         ctx.strokeStyle = '#333';
@@ -150,7 +147,7 @@ function loop() {
         ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
         ctx.fill(); ctx.stroke();
         if (b.life <= 0) bullets.splice(i, 1);
-    }
+    });
 
     // Tank Drawing
     const currentRadius = 12 + (level * 0.7);
@@ -158,25 +155,27 @@ function loop() {
     ctx.translate(player.x, player.y);
     ctx.rotate(player.angle);
     
-    // Recoil pushback on the body
-    ctx.translate(-player.recoil * 0.5, 0);
-
-    // Barrel (recoils inward)
+    // Barrel (Uses smooth spring position)
     ctx.fillStyle = '#999';
     ctx.strokeStyle = '#555';
     ctx.lineWidth = 3;
     const barrelW = currentRadius * 0.9;
     const barrelL = currentRadius * 1.9;
-    ctx.fillRect(-player.recoil, -barrelW/2, barrelL, barrelW);
-    ctx.strokeRect(-player.recoil, -barrelW/2, barrelL, barrelW);
+    // Barrel length is modified by the recoilPos (negative value)
+    ctx.fillRect(0, -barrelW/2, barrelL + player.recoilPos, barrelW);
+    ctx.strokeRect(0, -barrelW/2, barrelL + player.recoilPos, barrelW);
 
-    // Body
+    // Body (Jerks back slightly with barrel)
+    ctx.save();
+    ctx.translate(player.recoilPos * 0.3, 0); 
     ctx.fillStyle = '#00b2e1';
     ctx.strokeStyle = '#008ba8';
     ctx.beginPath();
     ctx.arc(0, 0, currentRadius, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    ctx.restore();
+
     ctx.restore();
     ctx.restore();
 
