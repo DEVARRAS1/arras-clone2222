@@ -6,12 +6,14 @@
         body { margin: 0; overflow: hidden; background: #b9b9b9; font-family: sans-serif; }
         canvas { display: block; }
         #ui { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; }
-        .bar-bg { width: 300px; height: 15px; background: #555; border: 2px solid #333; }
-        #bar-fill { width: 0%; height: 100%; background: #00b2e1; transition: width 0.1s; }
-        #stats { color: white; text-shadow: 1px 1px 2px black; margin-bottom: 5px; font-weight: bold; }
+        .bar-bg { width: 300px; height: 12px; background: #555; border: 2px solid #333; border-radius: 10px; overflow: hidden; }
+        #bar-fill { width: 0%; height: 100%; background: #00b2e1; transition: width 0.2s; }
+        #stats { color: white; text-shadow: 1px 1px 2px black; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+        #hint { position: absolute; top: 10px; left: 10px; color: #555; font-size: 12px; }
     </style>
 </head>
 <body>
+    <div id="hint">Press <b>N</b> to Insta-Level | Click to Shoot</div>
     <div id="ui">
         <div id="stats">Lvl 0 Tank | Score: 0</div>
         <div class="bar-bg"><div id="bar-fill"></div></div>
@@ -31,44 +33,56 @@ const maxLevel = 45;
 
 const player = {
     x: 0, y: 0,
-    radius: 10, // Base radius
+    vx: 0, vy: 0,
+    radius: 12,
     angle: 0,
-    speed: 4
+    accel: 0.3,
+    friction: 0.92,
+    maxSpeed: 2.5,
+    lastShot: 0,
+    reload: 400 // ms
 };
 
+let bullets = [];
 const keys = {};
-window.addEventListener('keydown', e => keys[e.code] = true);
+
+window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if (e.code === 'KeyN') { // N key shortcut
+        score = maxScore;
+        updateStats();
+    }
+});
 window.addEventListener('keyup', e => keys[e.code] = false);
+window.addEventListener('mousedown', () => keys['Mouse0'] = true);
+window.addEventListener('mouseup', () => keys['Mouse0'] = false);
 window.addEventListener('mousemove', e => {
     player.angle = Math.atan2(e.clientY - canvas.height/2, e.clientX - canvas.width/2);
 });
 
-// Gain score automatically for demo purposes
-setInterval(() => {
-    if (score < maxScore) {
-        score += 50;
-        level = Math.min(maxLevel, Math.floor((score / maxScore) * maxLevel));
-        updateUI();
-    }
-}, 100);
-
-function updateUI() {
+function updateStats() {
+    level = Math.min(maxLevel, Math.floor((score / maxScore) * maxLevel));
     stats.innerText = `Lvl ${level} Tank | Score: ${score.toLocaleString()}`;
     bar.style.width = (score / maxScore * 100) + "%";
 }
 
-function drawGrid(ox, oy) {
-    const size = 50;
-    ctx.strokeStyle = '#a0a0a0';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let x = -ox % size; x < canvas.width; x += size) {
-        ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height);
+function shoot() {
+    const now = Date.now();
+    if (now - player.lastShot > player.reload) {
+        const currentRadius = 12 + (level * 0.7);
+        const barrelLen = currentRadius * 1.9;
+        
+        // Spawn at tip of barrel
+        bullets.push({
+            x: player.x + Math.cos(player.angle) * barrelLen,
+            y: player.y + Math.sin(player.angle) * barrelLen,
+            vx: Math.cos(player.angle) * 8,
+            vy: Math.sin(player.angle) * 8,
+            life: 100, // Distance/Time it travels
+            radius: currentRadius * 0.6
+        });
+        player.lastShot = now;
     }
-    for (let y = -oy % size; y < canvas.height; y += size) {
-        ctx.moveTo(0, y); ctx.lineTo(canvas.width, y);
-    }
-    ctx.stroke();
 }
 
 function loop() {
@@ -76,35 +90,79 @@ function loop() {
     canvas.height = window.innerHeight;
 
     // Movement
-    if (keys['KeyW']) player.y -= player.speed;
-    if (keys['KeyS']) player.y += player.speed;
-    if (keys['KeyA']) player.x -= player.speed;
-    if (keys['KeyD']) player.x += player.speed;
+    if (keys['KeyW']) player.vy -= player.accel;
+    if (keys['KeyS']) player.vy += player.accel;
+    if (keys['KeyA']) player.vx -= player.accel;
+    if (keys['KeyD']) player.vx += player.accel;
+    if (keys['Mouse0']) shoot();
 
-    // Draw Map
-    drawGrid(player.x, player.y);
+    player.vx *= player.friction;
+    player.vy *= player.friction;
+    player.x += player.vx;
+    player.y += player.vy;
 
-    // Calculate Dynamic Size (from tiny to big)
-    const currentRadius = 10 + (level * 0.8);
-
-    // Draw Tank
+    // Camera Zoom Out Logic
+    const zoom = 1 / (1 + (level * 0.015)); 
     ctx.save();
     ctx.translate(canvas.width/2, canvas.height/2);
-    ctx.rotate(player.angle);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-player.x, -player.y);
 
+    // Draw Grid (Infinite)
+    const gridSize = 50;
+    ctx.strokeStyle = '#a8a8a8';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = player.x - canvas.width/zoom; x < player.x + canvas.width/zoom; x += gridSize) {
+        let drawX = Math.floor(x / gridSize) * gridSize;
+        ctx.moveTo(drawX, player.y - canvas.height/zoom);
+        ctx.lineTo(drawX, player.y + canvas.height/zoom);
+    }
+    for (let y = player.y - canvas.height/zoom; y < player.y + canvas.height/zoom; y += gridSize) {
+        let drawY = Math.floor(y / gridSize) * gridSize;
+        ctx.moveTo(player.x - canvas.width/zoom, drawY);
+        ctx.lineTo(player.x + canvas.width/zoom, drawY);
+    }
+    ctx.stroke();
+
+    // Bullets
+    bullets.forEach((b, i) => {
+        b.x += b.vx;
+        b.y += b.vy;
+        b.life--;
+        ctx.fillStyle = '#00b2e1';
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        if (b.life <= 0) bullets.splice(i, 1);
+    });
+
+    // Draw Tank
+    const currentRadius = 12 + (level * 0.7);
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(player.angle);
+    
     // Barrel
     ctx.fillStyle = '#999';
-    ctx.strokeStyle = '#333';
+    ctx.strokeStyle = '#555';
     ctx.lineWidth = 3;
-    ctx.fillRect(0, -currentRadius/1.5, currentRadius * 1.8, currentRadius * 1.3);
-    ctx.strokeRect(0, -currentRadius/1.5, currentRadius * 1.8, currentRadius * 1.3);
+    const barrelW = currentRadius * 0.9;
+    const barrelL = currentRadius * 1.9;
+    ctx.fillRect(0, -barrelW/2, barrelL, barrelW);
+    ctx.strokeRect(0, -barrelW/2, barrelL, barrelW);
 
     // Body
     ctx.fillStyle = '#00b2e1';
+    ctx.strokeStyle = '#008ba8';
     ctx.beginPath();
     ctx.arc(0, 0, currentRadius, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    ctx.restore();
     ctx.restore();
 
     requestAnimationFrame(loop);
