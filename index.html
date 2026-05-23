@@ -1,203 +1,115 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>My Arras.io</title>
-  <style>
-    body { margin:0; background:#111; overflow:hidden; font-family:Arial; }
-    canvas { display:block; margin:0 auto; background:#1a1a1a; }
-    #ui { position:absolute; top:15px; left:15px; color:#0f0; z-index:100; text-shadow: 0 0 5px #000; }
-    #upgrades { position:absolute; bottom:30px; left:50%; transform:translateX(-50%); z-index:100; display:flex; gap:12px; }
-    button { padding:12px 20px; background:#222; color:#0f0; border:2px solid #0f0; font-size:15px; cursor:pointer; }
-  </style>
+    <title>Arras.io Prototype</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #b9b9b9; font-family: sans-serif; }
+        canvas { display: block; }
+        #ui { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); text-align: center; pointer-events: none; }
+        .bar-bg { width: 300px; height: 15px; background: #555; border: 2px solid #333; }
+        #bar-fill { width: 0%; height: 100%; background: #00b2e1; transition: width 0.1s; }
+        #stats { color: white; text-shadow: 1px 1px 2px black; margin-bottom: 5px; font-weight: bold; }
+    </style>
 </head>
 <body>
+    <div id="ui">
+        <div id="stats">Lvl 0 Tank | Score: 0</div>
+        <div class="bar-bg"><div id="bar-fill"></div></div>
+    </div>
+    <canvas id="game"></canvas>
 
-  <div id="ui">
-    <h2>My Arras</h2>
-    <p>Level: <span id="level">1</span> | Score: <span id="score">0</span> | Kills: <span id="kills">0</span></p>
-  </div>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const stats = document.getElementById('stats');
+const bar = document.getElementById('bar-fill');
 
-  <div id="upgrades"></div>
-  <canvas id="game" width="1100" height="700"></canvas>
+let score = 0;
+let level = 0;
+const maxScore = 26000;
+const maxLevel = 45;
 
-  <script>
-    const canvas = document.getElementById("game");
-    const ctx = canvas.getContext("2d");
+const player = {
+    x: 0, y: 0,
+    radius: 10, // Base radius
+    angle: 0,
+    speed: 4
+};
 
-    let player = { x: 550, y: 350, size: 22, speed: 5, angle: 0, level: 1, score: 0, kills: 0, tankType: "Basic" };
-    let bullets = [];
-    let shapes = [];
-    let enemies = [];
-    let keys = {};
+const keys = {};
+window.addEventListener('keydown', e => keys[e.code] = true);
+window.addEventListener('keyup', e => keys[e.code] = false);
+window.addEventListener('mousemove', e => {
+    player.angle = Math.atan2(e.clientY - canvas.height/2, e.clientX - canvas.width/2);
+});
 
-    // Spawn stuff
-    for(let i = 0; i < 25; i++) {
-      shapes.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, size: 16, type: Math.random() > 0.6 ? "big" : "normal" });
+// Gain score automatically for demo purposes
+setInterval(() => {
+    if (score < maxScore) {
+        score += 50;
+        level = Math.min(maxLevel, Math.floor((score / maxScore) * maxLevel));
+        updateUI();
     }
-    for(let i = 0; i < 7; i++) spawnEnemy();
+}, 100);
 
-    function spawnEnemy() {
-      enemies.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, size: 20, speed: 2.5, health: 4 });
+function updateUI() {
+    stats.innerText = `Lvl ${level} Tank | Score: ${score.toLocaleString()}`;
+    bar.style.width = (score / maxScore * 100) + "%";
+}
+
+function drawGrid(ox, oy) {
+    const size = 50;
+    ctx.strokeStyle = '#a0a0a0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = -ox % size; x < canvas.width; x += size) {
+        ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height);
     }
-
-    canvas.addEventListener("mousemove", (e) => {
-      const rect = canvas.getBoundingClientRect();
-      player.angle = Math.atan2(e.clientY - rect.top - player.y, e.clientX - rect.left - player.x);
-    });
-
-    canvas.addEventListener("click", () => {
-      const speed = player.tankType === "Sniper" ? 13 : 9;
-      bullets.push({ x: player.x + Math.cos(player.angle)*25, y: player.y + Math.sin(player.angle)*25, vx: Math.cos(player.angle)*speed, vy: Math.sin(player.angle)*speed, size: 8, life: 70 });
-    });
-
-    window.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
-    window.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
-
-    window.upgradeTank = (type) => {
-      player.tankType = type;
-      document.getElementById("upgrades").innerHTML = `<h3 style="color:#0f0">Playing as: ${type}</h3>`;
-    };
-
-    function showUpgrades() {
-      document.getElementById("upgrades").innerHTML = `
-        <button onclick="upgradeTank('Twin')">Twin</button>
-        <button onclick="upgradeTank('Sniper')">Sniper</button>
-        <button onclick="upgradeTank('Machine')">Machine Gun</button>
-      `;
+    for (let y = -oy % size; y < canvas.height; y += size) {
+        ctx.moveTo(0, y); ctx.lineTo(canvas.width, y);
     }
+    ctx.stroke();
+}
 
-    function update() {
-      // Movement
-      if (keys['w'] || keys['arrowup']) player.y -= player.speed;
-      if (keys['s'] || keys['arrowdown']) player.y += player.speed;
-      if (keys['a'] || keys['arrowleft']) player.x -= player.speed;
-      if (keys['d'] || keys['arrowright']) player.x += player.speed;
+function loop() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
-      player.x = Math.max(25, Math.min(canvas.width - 25, player.x));
-      player.y = Math.max(25, Math.min(canvas.height - 25, player.y));
+    // Movement
+    if (keys['KeyW']) player.y -= player.speed;
+    if (keys['KeyS']) player.y += player.speed;
+    if (keys['KeyA']) player.x -= player.speed;
+    if (keys['KeyD']) player.x += player.speed;
 
-      // Bullets
-      for (let i = bullets.length - 1; i >= 0; i--) {
-        let b = bullets[i];
-        b.x += b.vx;
-        b.y += b.vy;
-        b.life--;
-        if (b.life <= 0) bullets.splice(i, 1);
-      }
+    // Draw Map
+    drawGrid(player.x, player.y);
 
-      // Shapes
-      for (let i = shapes.length - 1; i >= 0; i--) {
-        let s = shapes[i];
-        for (let j = bullets.length - 1; j >= 0; j--) {
-          let b = bullets[j];
-          if (Math.hypot(s.x - b.x, s.y - b.y) < s.size + b.size) {
-            shapes.splice(i, 1);
-            bullets.splice(j, 1);
-            player.score += s.type === "big" ? 25 : 10;
-            if (player.score > player.level * 130) player.level++;
-            if (player.level === 5) showUpgrades();
-            shapes.push({ x: Math.random()*canvas.width, y: Math.random()*canvas.height, size: 16, type: Math.random() > 0.6 ? "big" : "normal" });
-            break;
-          }
-        }
-      }
+    // Calculate Dynamic Size (from tiny to big)
+    const currentRadius = 10 + (level * 0.8);
 
-      // Enemies
-      for (let i = enemies.length - 1; i >= 0; i--) {
-        let e = enemies[i];
-        let dx = player.x - e.x;
-        let dy = player.y - e.y;
-        let dist = Math.hypot(dx, dy);
-        if (dist > 5) {
-          e.x += (dx / dist) * e.speed;
-          e.y += (dy / dist) * e.speed;
-        }
-        for (let j = bullets.length - 1; j >= 0; j--) {
-          let b = bullets[j];
-          if (Math.hypot(e.x - b.x, e.y - b.y) < e.size + b.size) {
-            e.health--;
-            bullets.splice(j, 1);
-            if (e.health <= 0) {
-              enemies.splice(i, 1);
-              player.kills++;
-              player.score += 50;
-              spawnEnemy();
-            }
-            break;
-          }
-        }
-      }
-    }
+    // Draw Tank
+    ctx.save();
+    ctx.translate(canvas.width/2, canvas.height/2);
+    ctx.rotate(player.angle);
 
-    function draw() {
-      ctx.fillStyle = "#1a1a1a";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Barrel
+    ctx.fillStyle = '#999';
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 3;
+    ctx.fillRect(0, -currentRadius/1.5, currentRadius * 1.8, currentRadius * 1.3);
+    ctx.strokeRect(0, -currentRadius/1.5, currentRadius * 1.8, currentRadius * 1.3);
 
-      // Grid
-      ctx.strokeStyle = "#222";
-      for (let x = 0; x < canvas.width; x += 50) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-      }
-      for (let y = 0; y < canvas.height; y += 50) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-      }
+    // Body
+    ctx.fillStyle = '#00b2e1';
+    ctx.beginPath();
+    ctx.arc(0, 0, currentRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
 
-      // Shapes
-      ctx.fillStyle = "#ff0";
-      for (let s of shapes) {
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Enemies
-      ctx.fillStyle = "#f44";
-      for (let e of enemies) {
-        ctx.save();
-        ctx.translate(e.x, e.y);
-        ctx.rotate(Math.atan2(player.y - e.y, player.x - e.x));
-        ctx.fillRect(-e.size, -e.size * 0.6, e.size * 2, e.size * 1.2);
-        ctx.restore();
-      }
-
-      // Player Tank
-      ctx.save();
-      ctx.translate(player.x, player.y);
-      ctx.rotate(player.angle);
-
-      ctx.fillStyle = "#0f0";
-      ctx.fillRect(-18, -18, 36, 36);
-
-      ctx.fillStyle = "#0a0";
-      if (player.tankType === "Twin") {
-        ctx.fillRect(15, -18, 30, 12);
-        ctx.fillRect(15, 6, 30, 12);
-      } else if (player.tankType === "Sniper") {
-        ctx.fillRect(15, -9, 45, 18);
-      } else if (player.tankType === "Machine") {
-        ctx.fillRect(15, -16, 28, 32);
-      } else {
-        ctx.fillRect(15, -12, 32, 24);
-      }
-      ctx.restore();
-
-      // Bullets
-      ctx.fillStyle = "#ff0";
-      for (let b of bullets) {
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    function loop() {
-      update();
-      draw();
-      requestAnimationFrame(loop);
-    }
-
-    loop();
-  </script>
+    requestAnimationFrame(loop);
+}
+loop();
+</script>
 </body>
 </html>
