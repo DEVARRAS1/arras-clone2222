@@ -35,10 +35,11 @@ const player = {
     radius: 12,
     angle: 0,
     accel: 0.3,
-    friction: 0.90, // Slightly more friction for better "thud" feel
+    friction: 0.92,
     maxSpeed: 2.5,
     lastShot: 0,
-    reload: 350
+    reload: 350,
+    barrelOffset: 0 // For the visual barrel kick
 };
 
 let bullets = [];
@@ -71,17 +72,18 @@ function shoot() {
         bullets.push({
             x: player.x + Math.cos(player.angle) * barrelL,
             y: player.y + Math.sin(player.angle) * barrelL,
-            vx: Math.cos(player.angle) * 10,
-            vy: Math.sin(player.angle) * 10,
-            life: 85 + (level * 2.5), 
+            vx: Math.cos(player.angle) * 9,
+            vy: Math.sin(player.angle) * 9,
+            life: 80 + (level * 2.5), 
             radius: barrelW / 2 
         });
 
-        // PHYSICAL PUSHBACK ONLY
-        // Stronger kick as you level up
-        const kickStrength = 1.2 + (level * 0.05); 
-        player.vx -= Math.cos(player.angle) * kickStrength;
-        player.vy -= Math.sin(player.angle) * kickStrength;
+        // VISUAL BARREL KICK
+        player.barrelOffset = 6; 
+
+        // SUBTLE PHYSICAL PUSHBACK
+        player.vx -= Math.cos(player.angle) * 0.3; 
+        player.vy -= Math.sin(player.angle) * 0.3;
         
         player.lastShot = now;
     }
@@ -91,18 +93,19 @@ function loop() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    // Movement Input
     if (keys['KeyW']) player.vy -= player.accel;
     if (keys['KeyS']) player.vy += player.accel;
     if (keys['KeyA']) player.vx -= player.accel;
     if (keys['KeyD']) player.vx += player.accel;
     if (keys['Mouse0']) shoot();
 
-    // Physics Processing
     player.vx *= player.friction;
     player.vy *= player.friction;
     player.x += player.vx;
     player.y += player.vy;
+
+    // Smooth visual recovery
+    if (player.barrelOffset > 0) player.barrelOffset *= 0.8;
 
     const zoom = 1 / (1 + (level * 0.012)); 
     ctx.save();
@@ -130,37 +133,27 @@ function loop() {
     // Bullets
     bullets.forEach((b, i) => {
         b.x += b.vx; b.y += b.vy; b.life--;
-        ctx.fillStyle = '#00b2e1';
-        ctx.strokeStyle = '#333';
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#00b2e1'; ctx.strokeStyle = '#333'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         if (b.life <= 0) bullets.splice(i, 1);
     });
 
-    // Tank Drawing
+    // Tank
     const currentRadius = 12 + (level * 0.7);
     ctx.save();
     ctx.translate(player.x, player.y);
     ctx.rotate(player.angle);
     
-    // Solid Barrel (No movement/scaling)
-    ctx.fillStyle = '#999';
-    ctx.strokeStyle = '#555';
-    ctx.lineWidth = 3;
+    // Barrel (slides back based on barrelOffset)
+    ctx.fillStyle = '#999'; ctx.strokeStyle = '#555'; ctx.lineWidth = 3;
     const barrelW = currentRadius * 0.9;
     const barrelL = currentRadius * 1.9;
-    ctx.fillRect(0, -barrelW/2, barrelL, barrelW);
-    ctx.strokeRect(0, -barrelW/2, barrelL, barrelW);
+    ctx.fillRect(-player.barrelOffset, -barrelW/2, barrelL, barrelW);
+    ctx.strokeRect(-player.barrelOffset, -barrelW/2, barrelL, barrelW);
 
     // Body
-    ctx.fillStyle = '#00b2e1';
-    ctx.strokeStyle = '#008ba8';
-    ctx.beginPath();
-    ctx.arc(0, 0, currentRadius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    ctx.fillStyle = '#00b2e1'; ctx.strokeStyle = '#008ba8';
+    ctx.beginPath(); ctx.arc(0, 0, currentRadius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
 
     ctx.restore();
     ctx.restore();
