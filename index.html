@@ -35,13 +35,10 @@ const player = {
     radius: 12,
     angle: 0,
     accel: 0.3,
-    friction: 0.92,
+    friction: 0.90, // Slightly more friction for better "thud" feel
     maxSpeed: 2.5,
     lastShot: 0,
-    reload: 350,
-    // Spring Physics for Recoil
-    recoilPos: 0,
-    recoilVel: 0
+    reload: 350
 };
 
 let bullets = [];
@@ -74,18 +71,17 @@ function shoot() {
         bullets.push({
             x: player.x + Math.cos(player.angle) * barrelL,
             y: player.y + Math.sin(player.angle) * barrelL,
-            vx: Math.cos(player.angle) * 9,
-            vy: Math.sin(player.angle) * 9,
-            life: 80 + (level * 2.5), 
+            vx: Math.cos(player.angle) * 10,
+            vy: Math.sin(player.angle) * 10,
+            life: 85 + (level * 2.5), 
             radius: barrelW / 2 
         });
 
-        // Jerk the recoil velocity back hard
-        player.recoilVel -= 12; 
-        
-        // Physical knockback
-        player.vx -= Math.cos(player.angle) * 0.6;
-        player.vy -= Math.sin(player.angle) * 0.6;
+        // PHYSICAL PUSHBACK ONLY
+        // Stronger kick as you level up
+        const kickStrength = 1.2 + (level * 0.05); 
+        player.vx -= Math.cos(player.angle) * kickStrength;
+        player.vy -= Math.sin(player.angle) * kickStrength;
         
         player.lastShot = now;
     }
@@ -95,24 +91,18 @@ function loop() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
+    // Movement Input
     if (keys['KeyW']) player.vy -= player.accel;
     if (keys['KeyS']) player.vy += player.accel;
     if (keys['KeyA']) player.vx -= player.accel;
     if (keys['KeyD']) player.vx += player.accel;
     if (keys['Mouse0']) shoot();
 
+    // Physics Processing
     player.vx *= player.friction;
     player.vy *= player.friction;
     player.x += player.vx;
     player.y += player.vy;
-
-    // --- Spring Math ---
-    let springK = 0.15; // Stiffness
-    let damping = 0.8;  // Friction for the spring
-    let force = -springK * player.recoilPos; 
-    player.recoilVel += force;
-    player.recoilVel *= damping;
-    player.recoilPos += player.recoilVel;
 
     const zoom = 1 / (1 + (level * 0.012)); 
     ctx.save();
@@ -155,26 +145,22 @@ function loop() {
     ctx.translate(player.x, player.y);
     ctx.rotate(player.angle);
     
-    // Barrel (Uses smooth spring position)
+    // Solid Barrel (No movement/scaling)
     ctx.fillStyle = '#999';
     ctx.strokeStyle = '#555';
     ctx.lineWidth = 3;
     const barrelW = currentRadius * 0.9;
     const barrelL = currentRadius * 1.9;
-    // Barrel length is modified by the recoilPos (negative value)
-    ctx.fillRect(0, -barrelW/2, barrelL + player.recoilPos, barrelW);
-    ctx.strokeRect(0, -barrelW/2, barrelL + player.recoilPos, barrelW);
+    ctx.fillRect(0, -barrelW/2, barrelL, barrelW);
+    ctx.strokeRect(0, -barrelW/2, barrelL, barrelW);
 
-    // Body (Jerks back slightly with barrel)
-    ctx.save();
-    ctx.translate(player.recoilPos * 0.3, 0); 
+    // Body
     ctx.fillStyle = '#00b2e1';
     ctx.strokeStyle = '#008ba8';
     ctx.beginPath();
     ctx.arc(0, 0, currentRadius, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    ctx.restore();
 
     ctx.restore();
     ctx.restore();
